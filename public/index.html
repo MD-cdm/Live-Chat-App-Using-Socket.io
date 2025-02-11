@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/emojionearea/3.4.2/emojionearea.min.css"/>
+</head>
+<body class="bg-gradient-to-b from-blue-500 to-pink-300 flex justify-center items-center h-screen">
+    <div class="bg-white shadow-lg rounded-lg w-96 p-5 relative">
+        <button id="backBtn" class="absolute top-2 left-2 text-blue-500 text-xl font-bold">⬅️</button>
+        <button id="leaveBtn" class="absolute top-2 right-2 text-red-500 text-xl font-bold">🗙</button>
+        <h2 class="text-2xl font-bold text-center mb-4 text-blue-900">Live Chat 📖</h2>
+        
+        <!-- Username Input & Join Button -->
+        <div class="flex gap-2">
+            <input type="text" id="username" class="border p-2 flex-1 rounded font-bold text-blue-900" placeholder="Enter your name..." />
+            <button id="joinBtn" class="bg-green-600 text-white px-4 py-2 rounded font-bold">Join</button>
+        </div>
+        
+        <div id="usersList" class="text-sm text-gray-600 my-2"></div>
+        <div id="welcomeMessage" class="hidden text-2xl font-bold text-blue-900 text-center my-4"></div>
+        <div id="messages" class="h-60 overflow-y-auto p-3 border my-3 bg-gray-50 rounded"></div>
+        
+        <div class="flex gap-2">
+            <input type="text" id="message" class="border p-2 flex-1 rounded" placeholder="Type a message..." />
+            <button id="sendBtn" class="bg-blue-900 text-white px-4 py-2 rounded">Send</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/emojionearea/3.4.2/emojionearea.min.js"></script>
+    <script>
+        const socket = io();
+        const sendBtn = document.getElementById("sendBtn");
+        const messageInput = $("#message");
+        const messagesDiv = document.getElementById("messages");
+        const usernameInput = document.getElementById("username");
+        const joinBtn = document.getElementById("joinBtn");
+        const welcomeMessage = document.getElementById("welcomeMessage");
+        const leaveBtn = document.getElementById("leaveBtn");
+        const backBtn = document.getElementById("backBtn");
+        const usersList = document.getElementById("usersList");
+
+        let username = "";
+
+        $(document).ready(function () {
+            $("#message").emojioneArea({
+                pickerPosition: "top",
+                tonesStyle: "bullet"
+            });
+        });
+
+        function joinChat() {
+            username = usernameInput.value.trim();
+            if (username) {
+                socket.emit("join", { user: username });
+                usernameInput.classList.add("hidden");
+                joinBtn.classList.add("hidden");
+                welcomeMessage.classList.remove("hidden");
+                welcomeMessage.innerText = `Welcome, ${username}!`;
+            }
+        }
+
+        joinBtn.addEventListener("click", joinChat);
+        usernameInput.addEventListener("keypress", (event) => {
+            if (event.key === "Enter") {
+                joinChat();
+            }
+        });
+
+        socket.on("update-users", (users) => {
+            usersList.innerText = "Active users: " + users.join(", ");
+        });
+
+        socket.on("message", (data) => {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.classList.add("flex", "flex-col", "w-fit", "max-w-xs", "p-1", "rounded", "my-1", "leading-tight");
+
+            if (data.user === "System") {
+                msgWrapper.classList.add("text-gray-500", "text-sm");
+            } else if (data.user === username) {
+                msgWrapper.classList.add("bg-green-300", "ml-auto");
+            } else {
+                msgWrapper.classList.add("bg-blue-200");
+            }
+
+            const msgText = document.createElement('p');
+            msgText.innerText = `${data.user}: ${data.text}`;
+            msgText.classList.add("text-sm");
+
+            const timeText = document.createElement('span');
+            timeText.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            timeText.classList.add("text-xs", "text-gray-500", "mt-0.5", "text-right");
+
+            msgWrapper.appendChild(msgText);
+            msgWrapper.appendChild(timeText);
+
+            messagesDiv.appendChild(msgWrapper);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+        messageInput.parent().on("keydown", ".emojionearea-editor", (e) => {
+            if (e.key === "Enter") {
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener("click", () => {
+            sendMessage();
+        });
+
+        function sendMessage() {
+            const message = messageInput[0].emojioneArea.getText().trim();
+            if (message && username) {
+                socket.emit("user-message", { user: username, text: message });
+                messageInput[0].emojioneArea.setText('');
+            }
+        }
+
+        leaveBtn.addEventListener("click", () => {
+            if (username) {
+                socket.emit("leave", { user: username });
+                username = "";
+                usernameInput.value = "";
+                usernameInput.classList.remove("hidden");
+                joinBtn.classList.remove("hidden");
+                welcomeMessage.classList.add("hidden");
+            }
+        });
+
+        backBtn.addEventListener("click", () => {
+            window.history.back();
+        });
+
+        socket.on("error-message", (message) => {
+            alert(message);
+            window.location.href = "https://www.google.com";
+        });
+    </script>
+</body>
+</html>
